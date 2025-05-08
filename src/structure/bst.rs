@@ -25,9 +25,7 @@ impl BstNode {
     }
 
     pub fn new_bst_nodelink(value: i32) -> BstNodeLink {
-        let currentnode = BstNode::new(value);
-        let currentlink = Rc::new(RefCell::new(currentnode));
-        currentlink
+        Rc::new(RefCell::new(BstNode::new(value)))
     }
 
     /**
@@ -38,7 +36,7 @@ impl BstNode {
     }
 
     fn downgrade(node: &BstNodeLink) -> WeakBstNodeLink {
-        Rc::<RefCell<BstNode>>::downgrade(node)
+        Rc::downgrade(node)
     }
 
     //private interface
@@ -46,8 +44,7 @@ impl BstNode {
         let mut currentnode = BstNode::new(value);
         //currentnode.add_parent(Rc::<RefCell<BstNode>>::downgrade(parent));
         currentnode.parent = Some(BstNode::downgrade(parent));
-        let currentlink = Rc::new(RefCell::new(currentnode));
-        currentlink
+        Rc::new(RefCell::new(currentnode))
     }
 
     //add new left child, set the parent to current_node_link
@@ -60,6 +57,87 @@ impl BstNode {
     pub fn add_right_child(&mut self, current_node_link: &BstNodeLink, value: i32) {
         let new_node = BstNode::new_with_parent(current_node_link, value);
         self.right = Some(new_node);
+    }
+
+    // Problem A.1 - Add a node (iterative version)
+    pub fn add_node(root: &mut Option<BstNodeLink>, key: i32) {
+        *root = Some(BstNode::tree_insert(root, &key));
+    }
+
+    // Problem A.2 - Find predecessor node (maximum of left subtree)
+    pub fn tree_predecessor(node: &BstNodeLink) -> Option<BstNodeLink> {
+        if let Some(left) = &node.borrow().left {
+            return Some(left.borrow().maximum());
+        }
+        let mut node = node.clone();
+        while let Some(parent_weak) = &node.borrow().parent {
+            let parent = parent_weak.upgrade().unwrap();
+            if let Some(right) = &parent.borrow().right {
+                if Rc::ptr_eq(right, &node) {
+                    return Some(parent.clone());
+                }
+            }
+            node = parent;
+        }
+        None
+    }
+
+    // Problem A.3 - Find median node value
+    pub fn median(root: &Option<BstNodeLink>) -> Option<i32> {
+        fn inorder(node: &Option<BstNodeLink>, nodes: &mut Vec<i32>) {
+            if let Some(n) = node {
+                inorder(&n.borrow().left, nodes);
+                if let Some(k) = n.borrow().key {
+                    nodes.push(k);
+                }
+                inorder(&n.borrow().right, nodes);
+            }
+        }
+        let mut nodes = Vec::new();
+        inorder(root, &mut nodes);
+        if nodes.is_empty() {
+            return None;
+        }
+        let mid = nodes.len() / 2;
+        if nodes.len() % 2 == 0 {
+            Some((nodes[mid - 1] + nodes[mid]) / 2)
+        } else {
+            Some(nodes[mid])
+        }
+    }
+
+    // Problem A.4 - Balance a node (stub: simple left-right rotation placeholder)
+    pub fn tree_rebalance(root: &mut Option<BstNodeLink>) {
+        fn inorder_flatten(node: &Option<BstNodeLink>, nodes: &mut Vec<i32>) {
+            if let Some(n) = node {
+                inorder_flatten(&n.borrow().left, nodes);
+                if let Some(k) = n.borrow().key {
+                    nodes.push(k);
+                }
+                inorder_flatten(&n.borrow().right, nodes);
+            }
+        }
+
+        fn build_balanced_bst(nums: &[i32]) -> Option<BstNodeLink> {
+            if nums.is_empty() {
+                return None;
+            }
+            let mid = nums.len() / 2;
+            let root = BstNode::new_bst_nodelink(nums[mid]);
+            root.borrow_mut().left = build_balanced_bst(&nums[..mid]);
+            if let Some(left) = &root.borrow().left {
+                left.borrow_mut().parent = Some(Rc::downgrade(&root));
+            }
+            root.borrow_mut().right = build_balanced_bst(&nums[mid + 1..]);
+            if let Some(right) = &root.borrow().right {
+                right.borrow_mut().parent = Some(Rc::downgrade(&root));
+            }
+            Some(root)
+        }
+
+        let mut keys = Vec::new();
+        inorder_flatten(root, &mut keys);
+        *root = build_balanced_bst(&keys);
     }
 
     /**change node u, with node v via parent swap
